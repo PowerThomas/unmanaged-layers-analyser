@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include secrets, access tokens, tenant IDs, or production data.
+  - type: input
+    id: version
+    attributes:
+      label: Get-UnmanagedLayers version
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: input
+    id: powershell
+    attributes:
+      label: PowerShell version
+      placeholder: "$PSVersionTable.PSVersion"
+    validations:
+      required: true
+  - type: input
+    id: azurecli
+    attributes:
+      label: Azure CLI version
+      placeholder: "az version"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment type
+      options:
+        - Sandbox
+        - Development
+        - Trial
+        - Production
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true

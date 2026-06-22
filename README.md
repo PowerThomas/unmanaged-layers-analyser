@@ -2,12 +2,13 @@
 
 ![Unmanaged Layers Analyser](assets/header.png)
 
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue?logo=powershell&logoColor=white)](https://docs.microsoft.com/powershell/)
+[![PowerShell](https://img.shields.io/badge/PowerShell-7%2B-blue?logo=powershell&logoColor=white)](https://docs.microsoft.com/powershell/)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/Get-UnmanagedLayers?label=PowerShell%20Gallery)](https://www.powershellgallery.com/packages/Get-UnmanagedLayers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white)]()
 [![GitHub stars](https://img.shields.io/github/stars/PowerThomas/unmanaged-layers-analyser?style=social)](https://github.com/PowerThomas/unmanaged-layers-analyser/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/PowerThomas/unmanaged-layers-analyser)](https://github.com/PowerThomas/unmanaged-layers-analyser/issues)
-[![GitHub last commit](https://img.shields.io/github/last-commit/PowerThomas/unmanaged-layers-analyser)](https://github.com/PowerThomas/unmanaged-layers-analyser/commits/main)
+[![GitHub last commit](https://img.shields.io/github/last-commit/PowerThomas/unmanaged-layers-analyser)](https://github.com/PowerThomas/unmanaged-layers-analyser/commits/master)
 
 A standalone, interactive PowerShell tool for detecting — and optionally removing — **unmanaged layers** in Power Platform / Dataverse managed solutions.
 
@@ -20,6 +21,7 @@ A standalone, interactive PowerShell tool for detecting — and optionally remov
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
+- [Before You Remove Unmanaged Layers](#before-you-remove-unmanaged-layers)
 - [Usage](#usage)
 - [How it works](#how-it-works)
 - [Contributing](#contributing)
@@ -43,20 +45,69 @@ A standalone, interactive PowerShell tool for detecting — and optionally remov
 
 | Requirement | Notes |
 |---|---|
-| PowerShell 5.1+ | Built-in on Windows 10/11; PowerShell 7+ also supported |
-| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and logged in via `az login` |
-| Power Platform access | At least **Environment Maker** or **System Administrator** role |
+| PowerShell 7+ | Required. Windows PowerShell 5.1 is not supported. |
+| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and logged in via `az login`. |
+| Power Platform access | At least **Environment Maker** or **System Administrator** role. |
 
 ---
 
 ## Installation
 
+### Recommended: PowerShell Gallery
+
+```powershell
+Install-Script -Name Get-UnmanagedLayers -Scope CurrentUser
+```
+
+After installation, run:
+
+```powershell
+Get-UnmanagedLayers.ps1
+```
+
+Depending on your execution policy, you may need to run:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### Development install
+
+Use this when contributing or testing unreleased changes:
+
 ```powershell
 git clone https://github.com/PowerThomas/unmanaged-layers-analyser.git
 cd unmanaged-layers-analyser
+.\Get-UnmanagedLayers.ps1
 ```
 
-No module installation or dependencies required — the script is fully self-contained.
+The script is fully self-contained. No extra PowerShell modules are required.
+
+---
+
+## Before You Remove Unmanaged Layers
+
+This tool can permanently remove unmanaged active layers from Dataverse components.
+
+Recommended workflow:
+
+1. Run the tool in a development or sandbox environment first.
+2. Export the result to CSV.
+3. Review affected components and changed attributes.
+4. Confirm with the solution or application owner.
+5. Remove unmanaged layers only after approval.
+6. Publish customizations after successful removal.
+7. Re-test the impacted app, flow, table, form, or component.
+
+Do not run destructive cleanup in production without approval and a rollback plan.
+
+PowerShell's standard `-WhatIf` support is available for removal operations:
+
+```powershell
+Get-UnmanagedLayers.ps1 -WhatIf
+```
+
+The tool still requires the interactive removal confirmations before any unmanaged layer is removed.
 
 ---
 
@@ -139,34 +190,9 @@ The script uses `az account get-access-token` to obtain Bearer tokens for both t
 
 ## Contributing
 
-Contributions are welcome! Please follow the steps below.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for development principles, local validation steps, and the pull request checklist.
 
-### Getting started
-
-1. **Fork** this repository
-2. **Create a branch**: `git checkout -b feature/your-feature-name`
-3. **Make your changes** — keep the single-file, no-dependency philosophy in mind
-4. **Test** against a real Dataverse environment (at minimum a non-production sandbox)
-5. **Commit** your changes: `git commit -m 'Add: description of your change'`
-6. **Push** to your fork: `git push origin feature/your-feature-name`
-7. **Open a Pull Request** and describe what you changed and why
-
-### Guidelines
-
-- **Single file** — keep the script fully self-contained with no external module dependencies beyond `az` CLI
-- **StrictMode safe** — the script runs with `Set-StrictMode -Version Latest`; always use `$obj.PSObject.Properties['key']` for safe property access on dynamic objects
-- **English only** — all user-facing messages, comments, and output must be in English
-- **Test on PS 5.1** — the minimum supported version is PowerShell 5.1 (Windows built-in)
-- **No production testing** — please test only against sandbox or development environments
-
-### Reporting bugs
-
-Please open an [issue](https://github.com/PowerThomas/unmanaged-layers-analyser/issues) and include:
-
-- PowerShell version: `$PSVersionTable.PSVersion`
-- Azure CLI version: `az version`
-- The full error message or unexpected behaviour description
-- Environment type (e.g. sandbox, trial, production)
+Please use the GitHub issue templates for bug reports and feature requests. Do not include secrets, access tokens, tenant IDs, or production data in public issues.
 
 ---
 

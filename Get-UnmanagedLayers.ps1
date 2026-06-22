@@ -1,17 +1,18 @@
 ﻿<#PSScriptInfo
-.VERSION 1.0.0
+.VERSION 1.0.1
 .GUID 7844f1fb-6004-4a9f-81fb-a7faeddaff22
 .AUTHOR PowerThomas
 .DESCRIPTION Interactive PowerShell tool to detect, inspect and remove unmanaged layers in Power Platform / Dataverse managed solutions. Authenticates via Azure CLI — no MSAL or app registration required.
-.COPYRIGHT (c) 2026 PowerThomas. All rights reserved.
+.COPYRIGHT (c) 2026 PowerThomas. Licensed under the MIT License.
 .TAGS PowerPlatform Dataverse PowerShell UnmanagedLayers ALM SolutionLayers
 .LICENSEURI https://github.com/PowerThomas/unmanaged-layers-analyser/blob/master/LICENSE
 .PROJECTURI https://github.com/PowerThomas/unmanaged-layers-analyser
 .RELEASENOTES
     1.0.0 - Initial release.
+    1.0.1 - Repository hygiene, PowerShell 7 requirement, Azure CLI login fix, README updates, and CI validation.
 #>
 
-#Requires -Version 5.1
+#Requires -Version 7.0
 <#
 .SYNOPSIS
     Detects unmanaged layers in a Power Platform / Dataverse solution.
@@ -26,7 +27,7 @@
     Authentication: via 'az login' — works with Conditional Access policies
 #>
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
 param()
 
 Set-StrictMode -Version Latest
@@ -110,20 +111,28 @@ function Get-ComponentTypeName {
 #region ── Azure CLI auth ────────────────────────────────────────────────────
 
 function Assert-AzureCli {
-    # Check if az is available
     if (-not (Get-Command 'az' -ErrorAction SilentlyContinue)) {
         throw "Azure CLI not found. Install from: https://aka.ms/installazurecliwindows"
     }
 
-    # Check if the user is logged in
     $account = az account show --output json 2>$null | ConvertFrom-Json
+
     if (-not $account) {
         Write-Warning2 'Not logged in to Azure CLI. Starting az login...'
         az login --output none
-        if ($LASTEXITCODE -ne 0) { throw 'az login failed.' }
+
+        if ($LASTEXITCODE -ne 0) {
+            throw 'az login failed.'
+        }
+
+        $account = az account show --output json 2>$null | ConvertFrom-Json
     }
 
-    Write-Ok "Logged in as: $($account.user.name)  (tenant: $($account.tenantId))"
+    if (-not $account) {
+        throw 'Azure CLI login succeeded, but no active account was found.'
+    }
+
+    Write-Ok "Logged in as: $($account.user.name) (tenant: $($account.tenantId))"
 }
 
 function Get-AccessToken {
@@ -146,6 +155,7 @@ function Get-AccessToken {
 #region ── REST helpers ───────────────────────────────────────────────────────
 
 function New-ApiHeaders {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'This helper only creates an in-memory headers hashtable.')]
     param([string]$Token)
     return @{
         Authorization    = "Bearer $Token"
@@ -378,13 +388,12 @@ function Show-Diff {
         Write-Host ("  " + ('-' * 60)) -ForegroundColor DarkGray
 
         foreach ($change in $changes) {
-$key     = $change.Attribute
-        $newVal  = if ($null -ne $change.Value) { $change.Value } else { '(null)' }
-        $oldVal  = if ($baseAttrs.ContainsKey($key)) {
-                       if ($null -ne $baseAttrs[$key]) { $baseAttrs[$key] } else { '(null)' }
-                   } else { '(unknown)' }
+            $key     = $change.Attribute
+            $newVal  = if ($null -ne $change.Value) { $change.Value } else { '(null)' }
+            $oldVal  = if ($baseAttrs.ContainsKey($key)) {
+                           if ($null -ne $baseAttrs[$key]) { $baseAttrs[$key] } else { '(null)' }
+                       } else { '(unknown)' }
 
-            $pad = [Math]::Max(60, $key.Length + 2)
             Write-Host ("  - {0,-45} {1}" -f $key, $oldVal) -ForegroundColor Red
             Write-Host ("  + {0,-45} {1}" -f $key, $newVal) -ForegroundColor Green
             Write-Host ''
@@ -466,6 +475,7 @@ function Export-ToCsv {
 }
 
 function Remove-UnmanagedLayers {
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
     <#
     .SYNOPSIS
         Removes unmanaged layers via the Dataverse action RemoveActiveCustomization.
@@ -533,6 +543,11 @@ function Remove-UnmanagedLayers {
         } | ConvertTo-Json
 
         try {
+            $target = "$compName / $compDisp / $compId"
+            if (-not $PSCmdlet.ShouldProcess($target, 'Remove unmanaged active layer')) {
+                continue
+            }
+
             Invoke-RestMethod -Uri $actionUrl -Headers $postHeaders -Method Post -Body $body -ErrorAction Stop
             $success++
         }
