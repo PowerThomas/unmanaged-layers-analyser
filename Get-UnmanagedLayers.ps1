@@ -1,4 +1,16 @@
-﻿#Requires -Version 5.1
+﻿<#PSScriptInfo
+.VERSION 1.0.0
+.GUID 7844f1fb-6004-4a9f-81fb-a7faeddaff22
+.AUTHOR PowerThomas
+.COPYRIGHT (c) 2026 PowerThomas. All rights reserved.
+.TAGS PowerPlatform Dataverse PowerShell UnmanagedLayers ALM SolutionLayers
+.LICENSEURI https://github.com/PowerThomas/unmanaged-layers-analyser/blob/master/LICENSE
+.PROJECTURI https://github.com/PowerThomas/unmanaged-layers-analyser
+.RELEASENOTES
+    1.0.0 - Initial release.
+#>
+
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Detects unmanaged layers in a Power Platform / Dataverse solution.
