@@ -92,7 +92,7 @@ The script guides you through the following steps interactively:
 ```
   diff  [Entity]  appointment
   ============================================================
-  --- BOSPlanningTool
+  --- ContosoCore
   +++ Unmanaged (Active)  publisher: Default Publisher for contoso
   ------------------------------------------------------------
   - synctoexternalsearchindex              True
