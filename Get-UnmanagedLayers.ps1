@@ -87,6 +87,16 @@ function Write-Step    { param([string]$Msg) Write-Host "  ▸ $Msg" -Foreground
 function Write-Ok      { param([string]$Msg) Write-Host "  ✓ $Msg" -ForegroundColor Green }
 function Write-Warning2 { param([string]$Msg) Write-Host "  ! $Msg" -ForegroundColor Yellow }
 
+function Test-YesNoPrompt {
+    param([string]$Value)
+
+    # Accept affirmative inputs such as 'y' and 'yes', plus 'j' for locales that use it (e.g. German 'ja'), and '1' for backward compatibility.
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+
+    $normalized = $Value.Trim().ToLowerInvariant()
+    return $normalized -in @('y', 'yes', 'j', '1')
+}
+
 function Invoke-MenuChoice {
     param([string]$Prompt, [int]$Min, [int]$Max)
     while ($true) {
@@ -437,7 +447,7 @@ function Show-Results {
     # Diff
     Write-Host '  Show diff? ' -ForegroundColor White -NoNewline
     $showDiff = Read-Host '[Y/N]'
-    if ($showDiff -match '^[YyJj]') { Show-Diff -Layers $Layers }
+    if (Test-YesNoPrompt -Value $showDiff) { Show-Diff -Layers $Layers }
 }
 
 function Export-ToCsv {
@@ -447,7 +457,7 @@ function Export-ToCsv {
     Write-Host ''
     Write-Host '  Export to CSV? ' -ForegroundColor White -NoNewline
     $answer = Read-Host '[Y/N]'
-    if ($answer -notmatch '^[YyJj1]') { return }
+    if (-not (Test-YesNoPrompt -Value $answer)) { return }
 
     $stamp   = Get-Date -Format 'yyyyMMdd-HHmm'
     $safeName = $SolutionUniqueName -replace '[^a-zA-Z0-9\-_]', '_'
@@ -496,7 +506,7 @@ function Remove-UnmanagedLayers {
     Write-Host ''
     Write-Host "  Remove all unmanaged layers? " -ForegroundColor White -NoNewline
     $check1 = Read-Host '[Y/N]'
-    if ($check1 -notmatch '^[YyJj]') {
+    if (-not (Test-YesNoPrompt -Value $check1)) {
         Write-Ok 'Removal cancelled.'
         return
     }
@@ -571,7 +581,7 @@ function Remove-UnmanagedLayers {
         Write-Host ''
         Write-Host '  Publish the environment now? (recommended after removal)' -ForegroundColor White -NoNewline
         $pub = Read-Host ' [Y/N]'
-        if ($pub -match '^[YyJj]') {
+        if (Test-YesNoPrompt -Value $pub) {
             Write-Step 'Publishing...'
             try {
                 $pubPayload = @{ ParameterXml = '' } | ConvertTo-Json
