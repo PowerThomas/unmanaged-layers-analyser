@@ -47,7 +47,7 @@ A standalone PowerShell tool for detecting — and optionally removing — **unm
 | Requirement | Notes |
 |---|---|
 | PowerShell 7+ | Required. Windows PowerShell 5.1 is not supported. |
-| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and logged in via `az login`. |
+| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and authenticated before running the script. In interactive mode, `az login` is sufficient; in non-interactive mode, the Azure CLI session must already be available (for example via `az login`, `az login --service-principal`, or managed identity). |
 | Power Platform access | At least **Environment Maker** or **System Administrator** role. |
 
 ---
@@ -154,7 +154,7 @@ The script guides you through the following steps interactively:
   -WhatIf
 ```
 
-When `-NonInteractive` is supplied, the script skips the environment/solution menus and any prompt-based confirmation. Combine it with `-ExportPath` to export without prompting, `-ShowDiff` to print the diff view, `-Remove` to delete unmanaged layers, and `-Publish` to publish automatically after removal.
+When `-NonInteractive` is supplied, the script skips the environment/solution menus and any prompt-based confirmation. It also avoids falling back to an interactive `az login`; instead it requires an existing Azure CLI authentication session (for example via `az login`, `az login --service-principal`, or managed identity). Combine it with `-ExportPath` to export without prompting, `-ShowDiff` to print the diff view, `-Remove` to delete unmanaged layers, and `-Publish` to publish automatically after removal.
 
 ### Example — results table
 

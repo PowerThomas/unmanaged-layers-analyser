@@ -147,6 +147,10 @@ function Assert-AzureCli {
     $account = az account show --output json 2>$null | ConvertFrom-Json
 
     if (-not $account) {
+        if ($script:NonInteractive) {
+            throw 'Azure CLI authentication is not available. Authenticate first (e.g., via az login, az login --service-principal, or managed identity) before running in non-interactive mode.'
+        }
+
         Write-Warning2 'Not logged in to Azure CLI. Starting az login...'
         az login --output none
 
