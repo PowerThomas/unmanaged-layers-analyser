@@ -28,10 +28,39 @@
 #>
 
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
-param()
+param(
+    [Parameter()]
+    [string]$EnvironmentUrl,
+
+    [Parameter()]
+    [string]$SolutionName,
+
+    [Parameter()]
+    [string]$ExportPath,
+
+    [Parameter()]
+    [switch]$ShowDiff,
+
+    [Parameter()]
+    [switch]$Remove,
+
+    [Parameter()]
+    [switch]$Publish,
+
+    [Parameter()]
+    [switch]$NonInteractive
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$script:EnvironmentUrl  = $EnvironmentUrl
+$script:SolutionName    = $SolutionName
+$script:ExportPath      = $ExportPath
+$script:ShowDiff        = $ShowDiff.IsPresent
+$script:Remove          = $Remove.IsPresent
+$script:Publish         = $Publish.IsPresent
+$script:NonInteractive  = $NonInteractive.IsPresent
 
 #region ── Constants ──────────────────────────────────────────────────────────
 
@@ -118,6 +147,10 @@ function Assert-AzureCli {
     $account = az account show --output json 2>$null | ConvertFrom-Json
 
     if (-not $account) {
+        if ($script:NonInteractive) {
+            throw 'Azure CLI authentication is not available. Authenticate first (e.g., via az login, az login --service-principal, or managed identity) before running in non-interactive mode.'
+        }
+
         Write-Warning2 'Not logged in to Azure CLI. Starting az login...'
         az login --output none
 
@@ -221,7 +254,16 @@ function Get-Environments {
 }
 
 function Select-Environment {
-    param([object[]]$Envs)
+    param([object[]]$Envs, [string]$EnvironmentUrl)
+
+    if ($EnvironmentUrl) {
+        $match = $Envs | Where-Object { $_.OrgUrl -eq $EnvironmentUrl } | Select-Object -First 1
+        if (-not $match) {
+            throw "Environment '$EnvironmentUrl' was not found in the available environments."
+        }
+        return $match
+    }
+
     Write-Section 'Select an environment'
     for ($i = 0; $i -lt $Envs.Count; $i++) {
         $e = $Envs[$i]
@@ -248,7 +290,19 @@ function Get-Solutions {
 }
 
 function Select-Solution {
-    param([object[]]$Solutions)
+    param([object[]]$Solutions, [string]$SolutionName)
+
+    if ($SolutionName) {
+        $match = $Solutions |
+            Where-Object { $_.uniquename -eq $SolutionName -or $_.friendlyname -eq $SolutionName } |
+            Select-Object -First 1
+
+        if (-not $match) {
+            throw "Solution '$SolutionName' was not found in the available solutions."
+        }
+        return $match
+    }
+
     Write-Section 'Select a solution'
     for ($i = 0; $i -lt $Solutions.Count; $i++) {
         $s = $Solutions[$i]
@@ -402,7 +456,7 @@ function Show-Diff {
 }
 
 function Show-Results {
-    param([object[]]$Layers, [string]$SolutionDisplayName)
+    param([object[]]$Layers, [string]$SolutionDisplayName, [switch]$ShowDiff, [switch]$NonInteractive)
     Write-Section "Results -- $SolutionDisplayName"
 
     if ($Layers.Count -eq 0) {
@@ -434,30 +488,43 @@ function Show-Results {
         }
     Write-Host ''
 
-    # Diff
-    Write-Host '  Show diff? ' -ForegroundColor White -NoNewline
-    $showDiff = Read-Host '[Y/N]'
-    if ($showDiff -match '^[YyJj]') { Show-Diff -Layers $Layers }
+    if ($ShowDiff) {
+        Show-Diff -Layers $Layers
+    }
+
+    if (-not $ShowDiff -and -not $NonInteractive) {
+        Write-Host '  Show diff? ' -ForegroundColor White -NoNewline
+        $showDiff = Read-Host '[Y/N]'
+        if ($showDiff -match '^[YyJj]') { Show-Diff -Layers $Layers }
+    }
 }
 
 function Export-ToCsv {
-    param([object[]]$Layers, [string]$SolutionUniqueName)
+    param([object[]]$Layers, [string]$SolutionUniqueName, [string]$ExportPath, [switch]$NonInteractive)
     if ($Layers.Count -eq 0) { return }
 
-    Write-Host ''
-    Write-Host '  Export to CSV? ' -ForegroundColor White -NoNewline
-    $answer = Read-Host '[Y/N]'
-    if ($answer -notmatch '^[YyJj1]') { return }
+    if ($ExportPath) {
+        $pad = if ([System.IO.Path]::IsPathRooted($ExportPath)) { $ExportPath } else { Join-Path (Get-Location) $ExportPath }
+    }
+    else {
+        if ($NonInteractive) { return }
 
-    $stamp   = Get-Date -Format 'yyyyMMdd-HHmm'
-    $safeName = $SolutionUniqueName -replace '[^a-zA-Z0-9\-_]', '_'
-    $default  = "unmanaged-layers_${safeName}_${stamp}.csv"
+        Write-Host ''
+        Write-Host '  Export to CSV? ' -ForegroundColor White -NoNewline
+        $answer = Read-Host '[Y/N]'
+        if ($answer -notmatch '^[YyJj1]') { return }
 
-    Write-Host "  File name [$default]: " -NoNewline -ForegroundColor White
-    $fileName = Read-Host
-    if ([string]::IsNullOrWhiteSpace($fileName)) { $fileName = $default }
+        $stamp   = Get-Date -Format 'yyyyMMdd-HHmm'
+        $safeName = $SolutionUniqueName -replace '[^a-zA-Z0-9\-_]', '_'
+        $default  = "unmanaged-layers_${safeName}_${stamp}.csv"
 
-    $pad = Join-Path (Get-Location) $fileName
+        Write-Host "  File name [$default]: " -NoNewline -ForegroundColor White
+        $fileName = Read-Host
+        if ([string]::IsNullOrWhiteSpace($fileName)) { $fileName = $default }
+
+        $pad = Join-Path (Get-Location) $fileName
+    }
+
     $Layers |
         Select-Object `
             @{ N = 'ComponentType';       E = { $_.msdyn_solutioncomponentname } },
@@ -481,45 +548,47 @@ function Remove-UnmanagedLayers {
         Removes unmanaged layers via the Dataverse action RemoveActiveCustomization.
         Requires double confirmation and displays a clear warning.
     #>
-    param([string]$OrgUrl, [object[]]$Layers, [string]$Token, [string]$SolutionDisplayName)
+    param([string]$OrgUrl, [object[]]$Layers, [string]$Token, [string]$SolutionDisplayName, [switch]$NonInteractive, [switch]$Publish)
 
     if ($Layers.Count -eq 0) { return }
 
-    Write-Host ''
-    Write-Host '  +---------------------------------------------------------+' -ForegroundColor Yellow
-    Write-Host '  |  WARNING: destructive action                            |' -ForegroundColor Yellow
-    Write-Host '  |  This permanently removes the unmanaged layers.         |' -ForegroundColor Yellow
-    Write-Host '  |  Do NOT run this in production without approval.        |' -ForegroundColor Yellow
-    Write-Host '  +---------------------------------------------------------+' -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host "  $($Layers.Count) layer(s) will be removed from solution: $SolutionDisplayName" -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host "  Remove all unmanaged layers? " -ForegroundColor White -NoNewline
-    $check1 = Read-Host '[Y/N]'
-    if ($check1 -notmatch '^[YyJj]') {
-        Write-Ok 'Removal cancelled.'
-        return
-    }
+    if (-not $NonInteractive -and -not $WhatIfPreference) {
+        Write-Host ''
+        Write-Host '  +---------------------------------------------------------+' -ForegroundColor Yellow
+        Write-Host '  |  WARNING: destructive action                            |' -ForegroundColor Yellow
+        Write-Host '  |  This permanently removes the unmanaged layers.         |' -ForegroundColor Yellow
+        Write-Host '  |  Do NOT run this in production without approval.        |' -ForegroundColor Yellow
+        Write-Host '  +---------------------------------------------------------+' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host "  $($Layers.Count) layer(s) will be removed from solution: $SolutionDisplayName" -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host "  Remove all unmanaged layers? " -ForegroundColor White -NoNewline
+        $check1 = Read-Host '[Y/N]'
+        if ($check1 -notmatch '^[YyJj]') {
+            Write-Ok 'Removal cancelled.'
+            return
+        }
 
-    Write-Host ''
-    Write-Host "  Confirm by typing the solution name exactly:" -ForegroundColor Red
-    Write-Host "  > $SolutionDisplayName" -ForegroundColor White
-    $confirmed = $false
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
-        Write-Host "  [$attempt/3]: " -ForegroundColor Red -NoNewline
-        $check2 = Read-Host
-        if ($check2 -eq $SolutionDisplayName) { $confirmed = $true; break }
-        if ($attempt -lt 3) { Write-Warning2 "Name does not match, please try again." }
-    }
-    if (-not $confirmed) {
-        Write-Ok 'Removal cancelled (solution name not entered correctly).'
-        return
+        Write-Host ''
+        Write-Host "  Confirm by typing the solution name exactly:" -ForegroundColor Red
+        Write-Host "  > $SolutionDisplayName" -ForegroundColor White
+        $confirmed = $false
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "  [$attempt/3]: " -ForegroundColor Red -NoNewline
+            $check2 = Read-Host
+            if ($check2 -eq $SolutionDisplayName) { $confirmed = $true; break }
+            if ($attempt -lt 3) { Write-Warning2 "Name does not match, please try again." }
+        }
+        if (-not $confirmed) {
+            Write-Ok 'Removal cancelled (solution name not entered correctly).'
+            return
+        }
     }
 
     Write-Section 'Removing unmanaged layers'
 
     $postHeaders = @{
-        Authorization      = "Bearer $Token"
+        Authorization      = 'Bearer ' + $Token
         'Content-Type'     = 'application/json'
         'OData-MaxVersion' = '4.0'
         'OData-Version'    = '4.0'
@@ -567,10 +636,10 @@ function Remove-UnmanagedLayers {
     Write-Ok   "Removed:  $success layer(s)"
     if ($failed -gt 0) { Write-Warning2 "Failed:   $failed layer(s)  (see warnings above)" }
 
-    if ($success -gt 0) {
+    if ($success -gt 0 -and ($Publish -or (-not $NonInteractive -and -not $WhatIfPreference))) {
         Write-Host ''
         Write-Host '  Publish the environment now? (recommended after removal)' -ForegroundColor White -NoNewline
-        $pub = Read-Host ' [Y/N]'
+        $pub = if ($Publish) { 'y' } else { Read-Host ' [Y/N]' }
         if ($pub -match '^[YyJj]') {
             Write-Step 'Publishing...'
             try {
@@ -591,6 +660,14 @@ function Remove-UnmanagedLayers {
 function Invoke-Main {
     Write-Banner
 
+    if ($script:NonInteractive -and [string]::IsNullOrWhiteSpace($script:EnvironmentUrl)) {
+        throw 'EnvironmentUrl is required in non-interactive mode.'
+    }
+
+    if ($script:NonInteractive -and [string]::IsNullOrWhiteSpace($script:SolutionName)) {
+        throw 'SolutionName is required in non-interactive mode.'
+    }
+
     # ── Step 1: Azure CLI available and logged in
     Write-Step 'Checking Azure CLI...'
     Assert-AzureCli
@@ -608,7 +685,7 @@ function Invoke-Main {
     }
     Write-Ok "$($envs.Count) environment(s) found."
 
-    $selectedEnv = Select-Environment -Envs $envs
+    $selectedEnv = Select-Environment -Envs $envs -EnvironmentUrl $script:EnvironmentUrl
     Write-Ok "Environment: $($selectedEnv.DisplayName)"
     Write-Host "             $($selectedEnv.OrgUrl)" -ForegroundColor DarkGray
 
@@ -625,7 +702,7 @@ function Invoke-Main {
     }
     Write-Ok "$($solutions.Count) solution(s) found."
 
-    $selectedSol = Select-Solution -Solutions $solutions
+    $selectedSol = Select-Solution -Solutions $solutions -SolutionName $script:SolutionName
     Write-Ok "Solution: $($selectedSol.friendlyname) (v$($selectedSol.version))"
 
     # ── Step 6: Retrieve components
@@ -645,11 +722,13 @@ function Invoke-Main {
     Write-Ok "$($layers.Count) unmanaged layer(s) detected."
 
     # ── Step 8: Display and export
-    Show-Results  -Layers $layers -SolutionDisplayName $selectedSol.friendlyname
-    Export-ToCsv  -Layers $layers -SolutionUniqueName  $selectedSol.uniquename
+    Show-Results -Layers $layers -SolutionDisplayName $selectedSol.friendlyname -ShowDiff:$script:ShowDiff -NonInteractive:$script:NonInteractive
+    Export-ToCsv -Layers $layers -SolutionUniqueName $selectedSol.uniquename -ExportPath $script:ExportPath -NonInteractive:$script:NonInteractive
 
     # ── Step 9: Optional removal
-    Remove-UnmanagedLayers -OrgUrl $selectedEnv.OrgUrl -Layers $layers -Token $dataverseToken -SolutionDisplayName $selectedSol.friendlyname
+    if ($script:Remove) {
+        Remove-UnmanagedLayers -OrgUrl $selectedEnv.OrgUrl -Layers $layers -Token $dataverseToken -SolutionDisplayName $selectedSol.friendlyname -NonInteractive:$script:NonInteractive -Publish:$script:Publish
+    }
 }
 
 try {

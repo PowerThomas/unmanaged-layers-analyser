@@ -10,7 +10,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/PowerThomas/unmanaged-layers-analyser)](https://github.com/PowerThomas/unmanaged-layers-analyser/issues)
 [![GitHub last commit](https://img.shields.io/github/last-commit/PowerThomas/unmanaged-layers-analyser)](https://github.com/PowerThomas/unmanaged-layers-analyser/commits/master)
 
-A standalone, interactive PowerShell tool for detecting — and optionally removing — **unmanaged layers** in Power Platform / Dataverse managed solutions.
+A standalone PowerShell tool for detecting — and optionally removing — **unmanaged layers** in Power Platform / Dataverse managed solutions.
 
 > Built as a lightweight CLI alternative for environments where XrmToolBox or MSAL-based tools are blocked by Conditional Access policies. Authentication is handled entirely via **Azure CLI**.
 
@@ -38,6 +38,7 @@ A standalone, interactive PowerShell tool for detecting — and optionally remov
 - 🔐 **Azure CLI authentication** — no MSAL, no app registration, Conditional Access compatible
 - 📊 **Summary** per component type with layer counts
 - 🔄 **Auto-publish** option after removal
+- 🤖 **Scripted / CI-friendly** execution with parameters for environment, solution, export, diff, removal, and publish
 
 ---
 
@@ -46,7 +47,7 @@ A standalone, interactive PowerShell tool for detecting — and optionally remov
 | Requirement | Notes |
 |---|---|
 | PowerShell 7+ | Required. Windows PowerShell 5.1 is not supported. |
-| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and logged in via `az login`. |
+| [Azure CLI](https://aka.ms/installazurecliwindows) | Must be installed and authenticated before running the script. In interactive mode, `az login` is sufficient; in non-interactive mode, the Azure CLI session must already be available (for example via `az login`, `az login --service-principal`, or managed identity). |
 | Power Platform access | At least **Environment Maker** or **System Administrator** role. |
 
 ---
@@ -104,10 +105,10 @@ Do not run destructive cleanup in production without approval and a rollback pla
 PowerShell's standard `-WhatIf` support is available for removal operations:
 
 ```powershell
-Get-UnmanagedLayers.ps1 -WhatIf
+Get-UnmanagedLayers.ps1 -EnvironmentUrl "https://org.crm4.dynamics.com" -SolutionName "contoso_core" -Remove -WhatIf
 ```
 
-The tool still requires the interactive removal confirmations before any unmanaged layer is removed.
+Interactive removal still prompts for confirmation, while `-NonInteractive` skips those prompts and `-Publish` can be used to publish automatically after removal.
 
 ---
 
@@ -116,6 +117,8 @@ The tool still requires the interactive removal confirmations before any unmanag
 ```powershell
 .\Get-UnmanagedLayers.ps1
 ```
+
+### Interactive mode (default)
 
 The script guides you through the following steps interactively:
 
@@ -130,6 +133,28 @@ The script guides you through the following steps interactively:
 9. Optionally exports results to **CSV**
 10. Optionally **removes** all unmanaged layers (with double confirmation)
 11. Optionally **publishes** the environment after removal
+
+### Non-interactive / scripted mode
+
+```powershell
+.\Get-UnmanagedLayers.ps1 `
+  -EnvironmentUrl "https://org.crm4.dynamics.com" `
+  -SolutionName "contoso_core" `
+  -ExportPath "./unmanaged-layers.csv" `
+  -ShowDiff `
+  -NonInteractive
+```
+
+```powershell
+.\Get-UnmanagedLayers.ps1 `
+  -EnvironmentUrl "https://org.crm4.dynamics.com" `
+  -SolutionName "contoso_core" `
+  -Remove `
+  -Publish `
+  -WhatIf
+```
+
+When `-NonInteractive` is supplied, the script skips the environment/solution menus and any prompt-based confirmation. It also avoids falling back to an interactive `az login`; instead it requires an existing Azure CLI authentication session (for example via `az login`, `az login --service-principal`, or managed identity). Combine it with `-ExportPath` to export without prompting, `-ShowDiff` to print the diff view, `-Remove` to delete unmanaged layers, and `-Publish` to publish automatically after removal.
 
 ### Example — results table
 
