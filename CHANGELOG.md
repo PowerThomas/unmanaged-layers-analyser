@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 This project follows semantic versioning where practical.
 
+## [Unreleased]
+
+### Fixed
+
+- Accept lowercase and other case-insensitive yes/no responses at interactive prompts without raising errors.
+
 ## [1.0.1] - 2026-06-22
 
 ### Changed
