@@ -643,9 +643,8 @@ function Remove-UnmanagedLayers {
         if ($pub -match '^[YyJj]') {
             Write-Step 'Publishing...'
             try {
-                $pubPayload = @{ ParameterXml = '' } | ConvertTo-Json
                 Invoke-RestMethod -Uri "$OrgUrl/api/data/$script:DATAVERSE_VERSION/PublishAllXml" `
-                    -Headers $postHeaders -Method Post -Body $pubPayload -ErrorAction Stop
+                    -Headers $postHeaders -Method Post -ErrorAction Stop
                 Write-Ok 'Published.'
             }
             catch { Write-Warning2 "Publish failed: $($_.ErrorDetails.Message ?? $_.Exception.Message)" }
